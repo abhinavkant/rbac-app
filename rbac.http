@@ -1,0 +1,173 @@
+### Rbac sample requests for the VS Code REST Client / Rider / Visual Studio.
+###
+### 1. Send the five login requests below.
+### 2. Copy each accessToken from the response into the matching variable at the top of this file.
+### 3. Send any of the demo requests. The comments state the expected status code.
+
+@host = http://localhost:5010
+@adminToken = paste-admin-accessToken
+@managerToken = paste-manager-accessToken
+@supportToken = paste-support-accessToken
+@viewerToken = paste-viewer-accessToken
+@auditorToken = paste-auditor-accessToken
+
+### Login (anonymous) - Viewer gets orders:read from the role plus a direct reports:export grant.
+# @name loginAdmin
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@rbac.dev",
+  "password": "Admin!Pass123"
+}
+
+### Manager: rich, but no users:create / users:delete.
+# @name loginManager
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "manager@rbac.dev",
+  "password": "Manager!Pass123"
+}
+
+### Support: reads users and orders, cancels orders, creates nothing.
+# @name loginSupport
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "support@rbac.dev",
+  "password": "Support!Pass123"
+}
+
+### Viewer: read-only on orders, plus reports:export granted directly on the user.
+# @name loginViewer
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "viewer@rbac.dev",
+  "password": "Viewer!Pass123"
+}
+
+### Auditor: reports:read only.
+# @name loginAuditor
+POST {{host}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "auditor@rbac.dev",
+  "password": "Auditor!Pass123"
+}
+
+### Who am I and what may I do?
+GET {{host}}/auth/me
+Authorization: Bearer {{viewerToken}}
+
+### The whole RBAC configuration: every permission and the roles that carry it.
+GET {{host}}/roles
+Authorization: Bearer {{auditorToken}}
+
+### 401 - no token at all.
+GET {{host}}/users
+
+### 403 - authenticated, but the token has no users:read.
+GET {{host}}/users
+Authorization: Bearer {{viewerToken}}
+
+### 200 - Support holds users:read.
+GET {{host}}/users
+Authorization: Bearer {{supportToken}}
+
+### 201 - Manager holds orders:create.
+POST {{host}}/orders
+Authorization: Bearer {{managerToken}}
+Content-Type: application/json
+
+{
+  "customerEmail": "customer@example.com",
+  "description": "Ultrawide monitor",
+  "total": 899.50
+}
+
+### 403 - the Viewer has no orders:create.
+POST {{host}}/orders
+Authorization: Bearer {{viewerToken}}
+Content-Type: application/json
+
+{
+  "customerEmail": "customer@example.com",
+  "description": "Keyboard",
+  "total": 149.00
+}
+
+### 200 - reports:read.
+GET {{host}}/reports/summary
+Authorization: Bearer {{auditorToken}}
+
+### 200 - reports:export held by the Viewer as a direct grant (no role carries it for the Viewer).
+GET {{host}}/reports/export
+Authorization: Bearer {{viewerToken}}
+
+### 403 - the Auditor can read reports but not export them.
+GET {{host}}/reports/export
+Authorization: Bearer {{auditorToken}}
+
+### 200 - requires reports:read AND reports:export; the Manager holds both.
+GET {{host}}/reports/full
+Authorization: Bearer {{managerToken}}
+
+### 403 - the Viewer holds only one of the two.
+GET {{host}}/reports/full
+Authorization: Bearer {{viewerToken}}
+
+### Admin creates a user with two roles and one direct permission.
+POST {{host}}/users
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "email": "new.hire@rbac.dev",
+  "password": "NewHire!Pass123",
+  "firstName": "New",
+  "lastName": "Hire",
+  "roles": ["Viewer", "Auditor"],
+  "permissions": ["orders:create"]
+}
+
+### Grant another permission directly (users:grant-permissions).
+POST {{host}}/users/REPLACE-WITH-USER-ID/permissions
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "permissions": ["reports:export"],
+  "revoke": false
+}
+
+### Replace a user's roles (users:assign-roles).
+POST {{host}}/users/REPLACE-WITH-USER-ID/roles
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "roles": ["Manager"]
+}
+
+### Delete a user (users:delete).
+DELETE {{host}}/users/REPLACE-WITH-USER-ID
+Authorization: Bearer {{adminToken}}
+
+### 400 - unknown role names are rejected with a validation problem.
+POST {{host}}/users
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "email": "wizard@rbac.dev",
+  "password": "Wizard!Pass123",
+  "firstName": "The",
+  "lastName": "Wizard",
+  "roles": ["Wizard"]
+}
